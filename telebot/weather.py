@@ -49,7 +49,7 @@ def weather():
           "\nВлажность: `" + str(temp['humidity']) + "%`" + \
           "\nВетер: `" + str(wind) + " (м/с)`" + \
           "\nОблачность: `" + str(clouds) + "%`" + \
-          "\nСейчас: `" + wtype_tr + wdesc_tr
+          "\nСейчас: `" + wtype_tr + wdesc_tr + "`"
     return res
 
 
