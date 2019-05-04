@@ -1,0 +1,4 @@
+aiogram==2.1
+requests==2.21.0
+APScheduler==3.6.0
+googletrans==2.4.0
