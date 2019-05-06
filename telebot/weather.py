@@ -1,6 +1,7 @@
 import emoji
 import telebot
 import requests
+import datetime
 from telebot import types
 from telebot import apihelper
 from googletrans import Translator
@@ -18,7 +19,19 @@ apihelper.proxy = {
 API_TOKEN = ""
 bot = telebot.TeleBot(API_TOKEN)
 
-commands = {"commands": '/weather - погода сейчас'}
+commands = {"commands": '/weather - погода сейчас\n'
+                        '/subscribe - информация о погоде каждые 6 часов'}
+
+
+def listener(messages):
+    for m in messages:
+        if m.content_type == 'text':
+            f_message = open("history.txt", 'a')
+            f_message.write(datetime.datetime.fromtimestamp(int(m.date)).strftime("%d.%m.%Y %H:%M:%S") + "[" + str(
+                m.chat.id) + "]" + m.chat.first_name + ": " + m.text + "\n")
+            f_message.close()
+bot.set_update_listener(listener)
+
 
 @bot.message_handler(commands=['start', 'help'])
 def start_cmd(m):
@@ -85,15 +98,16 @@ def yandex():
             'overcast-thunderstorms-with-rain': 'сильный дождь, гроза', 'cloudy-and-light-rain': 'небольшой дождь',
             'overcast-and-light-rain': 'небольшой дождь', 'cloudy-and-rain': 'дождь',
             'overcast-and-wet-snow': 'дождь со снегом', 'partly-cloudy-and-light-snow': 'небольшой снег',
-            'partly-cloudy-and-snow': 'снег', 'overcast-and-snow': 'снегопад', 'cloudy-and-light-snow': 'небольшой снег',
-            'overcast-and-light-snow': 'небольшой снег', 'cloudy-and-snow': 'снег'}
+            'partly-cloudy-and-snow': 'снег', 'overcast-and-snow': 'снегопад',
+            'cloudy-and-light-snow': 'небольшой снег', 'overcast-and-light-snow': 'небольшой снег',
+            'cloudy-and-snow': 'снег'}
 
     res = "*По данным Яндекс.Погоды:*\nТемпература: `" + str(temp) + "°`" + \
-        "\nОбщущается как: `" + str(feels_temp) + "°`" + \
-        "\nДавление: `" + str(pressure) + " мм рт. ст.`" + \
-        "\nВлажность: `" + str(humidity) + "%`" + \
-        "\nВетер: `" + str(wind) + " (м/с)`" + \
-        "\nСейчас: `" + cond[condition] + "`"
+          "\nОщущается как: `" + str(feels_temp) + "°`" + \
+          "\nДавление: `" + str(pressure) + " мм рт. ст.`" + \
+          "\nВлажность: `" + str(humidity) + "%`" + \
+          "\nВетер: `" + str(wind) + " (м/с)`" + \
+          "\nСейчас: `" + cond[condition] + "`"
     return res
 
 
@@ -111,6 +125,18 @@ def select_source(m):
     bot.send_message(cid, "Выберите источник погоды:", reply_markup=keyboard)
 
 
+@bot.message_handler(commands=['subscribe'])
+def sub(m):
+    cid = m.chat.id
+    sub = [line.rstrip('\n') for line in open("sub.txt", 'rt')]
+    if str(cid) in sub:
+        bot.send_message(cid, "Вы уже подписаны...")
+    else:
+        with open("sub.txt", 'a') as f:
+            f.write(str(cid) + "\n")
+        bot.send_message(cid, "Вы успешно подписаны!")
+
+
 @bot.callback_query_handler(func=lambda call: True)
 def ans(call):
     kb = types.InlineKeyboardMarkup()
@@ -123,19 +149,25 @@ def ans(call):
 
 
 def weather_schedule():
-    bot.send_message(123, openweathermap(), parse_mode='Markdown')
-    bot.send_message(123, yandex(), parse_mode='Markdown')
+    subs = [line.rstrip('\n') for line in open("sub.txt", 'r')]
+    for sub in subs:
+        bot.send_message(sub, openweathermap(), parse_mode='Markdown')
+        bot.send_message(sub, yandex(), parse_mode='Markdown')
 
 
-@bot.message_handler(content_types=['photo', 'video', 'voice', 'location', 'contact', 'sticker', 'audio', 'document', 'text'])
+@bot.message_handler(
+    content_types=['photo', 'video', 'voice', 'location', 'contact', 'sticker', 'audio', 'document', 'text'])
 def command_echo(m):
     cid = m.chat.id
     bot.send_message(cid, emoji.emojize(":thinking_face:") + "\nПопробуй команду /help\n")
 
 
 if __name__ == "__main__":
+    dt = datetime.datetime.now()
+    # specific time to start sending notifications (18:00:00)
+    dt = dt.replace(hour=18, minute=0, second=0, microsecond=0)
     scheduler = BackgroundScheduler()
-    scheduler.add_job(weather_schedule, 'interval', hours=6)
+    scheduler.add_job(weather_schedule, 'interval', hours=6, start_date=dt)
     scheduler.start()
     try:
         bot.polling(none_stop=True)
