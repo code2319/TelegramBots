@@ -1,4 +1,5 @@
 import requests
+import datetime
 from aiogram import Bot, Dispatcher, executor, types
 from aiogram.types import ParseMode, ContentType
 from aiogram.utils.markdown import text, italic, code
@@ -17,7 +18,8 @@ API_TOKEN = ""
 bot = Bot(token=API_TOKEN, proxy=PROXY_URL)
 dp = Dispatcher(bot)
 
-commands = {"commands": '/weather - погода сейчас'}
+commands = {"commands": '/weather - погода сейчас\n'
+                        '/subscribe - информация о погоде каждые 6 часов'}
 
 
 @dp.message_handler(commands=['start', 'help'])
@@ -35,25 +37,21 @@ def openweathermap():
 
     temp = data['list'][0]['main']
     wind = data['list'][0]['wind']['speed']
-    rain = data['list'][0]['rain']
-    if rain is None:
-        rain = 'Нет'
-    snow = data['list'][0]['snow']
-    if snow is None:
-        snow = 'Нет'
-    cloudsp = data['list'][0]['clouds']['all']
-    clouds = data['list'][0]['weather'][0]['description']
-    ts_text = translator.translate(clouds, dest="ru").text + " "
+    clouds = data['list'][0]['clouds']['all']
+    wtype = data['list'][0]['weather'][0]['main']
+    wdesc = data['list'][0]['weather'][0]['description']
 
-    res = text("Температура: " + code(str(temp['temp']) + "°") + \
-               "\nМинимальная: " + code(str(temp['temp_min']) + "°") + \
-               "\nМаксимальная: " + code(str(temp['temp_max']) + "°") + \
-               "\nДавление: " + code(str(temp['pressure'] * 0.75) + " мм рт. ст.") + \
-               "\nВлажность: " + code(str(temp['humidity']) + "%") + \
-               "\nВетер: " + code(str(wind) + " (м/с)") + \
-               "\nДождь: " + code(rain) + \
-               "\nСнег: " + code(snow) + \
-               "\nОблака: " + code(ts_text + str(cloudsp) + "%"))
+    wtype_tr = translator.translate(wtype, dest="ru").text + " ("
+    wdesc_tr = translator.translate(wdesc, dest="ru").text + ")"
+
+    res = "*По данным OpenWeatherMap:*\nТемпература: `" + str(temp['temp']) + "°`" + \
+          "\nМинимальная: `" + str(temp['temp_min']) + "°`" + \
+          "\nМаксимальная: `" + str(temp['temp_max']) + "°`" + \
+          "\nДавление: `" + str(temp['pressure'] * 0.75) + " мм рт. ст.`" + \
+          "\nВлажность: `" + str(temp['humidity']) + "%`" + \
+          "\nВетер: `" + str(wind) + " (м/с)`" + \
+          "\nОблачность: `" + str(clouds) + "%`" + \
+          "\nСейчас: `" + wtype_tr + wdesc_tr + "`"
     return res
 
 
@@ -75,10 +73,10 @@ def yandex():
 
     temp = data['fact']['temp']
     feels_temp = data['fact']['feels_like']
-    condition = data['fact']['condition'] #Код расшифровки погодного описания
-    wind = data['fact']['wind_speed'] #скорость ветра (м/с)
+    condition = data['fact']['condition']
+    wind = data['fact']['wind_speed']
     pressure = data['fact']['pressure_mm']
-    humidity = data['fact']['humidity'] #Влажность воздуха (в процентах)
+    humidity = data['fact']['humidity']
 
     cond = {'clear': 'ясно', 'partly-cloudy': 'малооблачно', 'cloudy': 'облачно с прояснениями',
             'overcast': 'пасмурно', 'partly-cloudy-and-light-rain': 'небольшой дождь',
@@ -90,7 +88,7 @@ def yandex():
             'overcast-and-light-snow': 'небольшой снег', 'cloudy-and-snow': 'снег'}
 
     res = "*По данным Яндекс.Погоды:*\nТемпература: `" + str(temp) + "°`" + \
-        "\nОбщущается как: `" + str(feels_temp) + "°`" + \
+        "\nОщущается как: `" + str(feels_temp) + "°`" + \
         "\nДавление: `" + str(pressure) + " мм рт. ст.`" + \
         "\nВлажность: `" + str(humidity) + "%`" + \
         "\nВетер: `" + str(wind) + " (м/с)`" + \
@@ -112,10 +110,16 @@ async def select_source(m: types.Message):
     await bot.send_message(cid, "Выберите источник погоды:", reply_markup=keyboard)
 
 
-async def weather_schedule():
-    # 123 - message.chat.id - who subscribed to receive notifications on schedule
-    await bot.send_message(123, openweathermap(), parse_mode=ParseMode.MARKDOWN)
-    await bot.send_message(123, yandex(), parse_mode=ParseMode.MARKDOWN)
+@dp.message_handler(commands=['subscribe'])
+async def sub(m):
+    cid = m.chat.id
+    sub = [line.rstrip('\n') for line in open("sub.txt", 'rt')]
+    if str(cid) in sub:
+        await bot.send_message(cid, "Вы уже подписаны...")
+    else:
+        with open("sub.txt", 'a') as f:
+            f.write(str(cid) + "\n")
+        await bot.send_message(cid, "Вы успешно подписаны!")
 
 
 @dp.callback_query_handler(lambda callback_query: True)
@@ -127,6 +131,13 @@ async def ans(call: types.CallbackQuery):
         await bot.edit_message_text(openweathermap(), cid, mid, reply_markup=kb, parse_mode=ParseMode.MARKDOWN)
     elif call.data == "yandex":
         await bot.edit_message_text(yandex(), cid, mid, reply_markup=kb, parse_mode=ParseMode.MARKDOWN)
+
+
+async def weather_schedule():
+    subs = [line.rstrip('\n') for line in open("sub.txt", 'r')]
+    for sub in subs:
+        await bot.send_message(sub, openweathermap(), parse_mode=ParseMode.MARKDOWN)
+        await bot.send_message(sub, yandex(), parse_mode=ParseMode.MARKDOWN)
 
 
 @dp.message_handler(content_types=ContentType.ANY)
@@ -147,7 +158,10 @@ async def unknown_message(msg: types.Message):
 
 
 if __name__ == '__main__':
+    dt = datetime.datetime.now()
+    # specific time to start sending notifications (18:00:00)
+    dt = dt.replace(hour=18, minute=0, second=0, microsecond=0)
     scheduler = AsyncIOScheduler()
-    scheduler.add_job(weather_schedule, 'interval', hours=6)
+    scheduler.add_job(weather_schedule, 'interval', hours=6, start_date=dt)
     scheduler.start()
     executor.start_polling(dp, skip_updates=True)
