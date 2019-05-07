@@ -19,7 +19,8 @@ bot = Bot(token=API_TOKEN, proxy=PROXY_URL)
 dp = Dispatcher(bot)
 
 commands = {"commands": '/weather - погода сейчас\n'
-                        '/subscribe - информация о погоде каждые 6 часов'}
+                        '/sub - подписаться на уведомления\n'
+                        '/unsub - отписаться от уведомлений'}
 
 
 @dp.message_handler(commands=['start', 'help'])
@@ -110,7 +111,7 @@ async def select_source(m: types.Message):
     await bot.send_message(cid, "Выберите источник погоды:", reply_markup=keyboard)
 
 
-@dp.message_handler(commands=['subscribe'])
+@dp.message_handler(commands=['sub'])
 async def sub(m):
     cid = m.chat.id
     sub = [line.rstrip('\n') for line in open("sub.txt", 'rt')]
@@ -120,6 +121,21 @@ async def sub(m):
         with open("sub.txt", 'a') as f:
             f.write(str(cid) + "\n")
         await bot.send_message(cid, "Вы успешно подписаны!")
+
+
+@dp.message_handler(commands=['unsub'])
+async def unsub(m):
+    cid = m.chat.id
+    with open("sub.txt", 'r') as f:
+        lines = f.readlines()
+        h = str(cid) + "\n"
+        if h in lines:
+            lines.remove(h)
+            with open("sub.txt", 'w') as f2:
+                f2.writelines(lines)
+                await bot.send_message(cid, "Вы отписались :с")
+        else:
+            await bot.send_message(cid, "Вы еще не подписаны...")
 
 
 @dp.callback_query_handler(lambda callback_query: True)

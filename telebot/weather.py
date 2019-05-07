@@ -20,7 +20,8 @@ API_TOKEN = ""
 bot = telebot.TeleBot(API_TOKEN)
 
 commands = {"commands": '/weather - погода сейчас\n'
-                        '/subscribe - информация о погоде каждые 6 часов'}
+                        '/sub - подписаться на уведомления\n'
+                        '/unsub - отписаться от уведомлений'}
 
 
 def listener(messages):
@@ -125,7 +126,7 @@ def select_source(m):
     bot.send_message(cid, "Выберите источник погоды:", reply_markup=keyboard)
 
 
-@bot.message_handler(commands=['subscribe'])
+@bot.message_handler(commands=['sub'])
 def sub(m):
     cid = m.chat.id
     sub = [line.rstrip('\n') for line in open("sub.txt", 'rt')]
@@ -135,6 +136,21 @@ def sub(m):
         with open("sub.txt", 'a') as f:
             f.write(str(cid) + "\n")
         bot.send_message(cid, "Вы успешно подписаны!")
+
+
+@bot.message_handler(commands=['unsub'])
+def unsub(m):
+    cid = m.chat.id
+    with open("sub.txt", 'r') as f:
+        lines = f.readlines()
+        h = str(cid) + "\n"
+        if h in lines:
+            lines.remove(h)
+            with open("sub.txt", 'w') as f2:
+                f2.writelines(lines)
+                bot.send_message(cid, "Вы отписались :с")
+        else:
+            bot.send_message(cid, "Вы еще не подписаны...")
 
 
 @bot.callback_query_handler(func=lambda call: True)
