@@ -1,10 +1,19 @@
+import json
+import hmac
+import time
+import uuid
 import emoji
+import urllib
+import hashlib
 import telebot
 import requests
 import datetime
+import urllib.parse
 from telebot import types
+from base64 import b64encode
 from telebot import apihelper
 from googletrans import Translator
+from urllib.request import urlopen
 from apscheduler.schedulers.background import BackgroundScheduler
 
 login = ''
@@ -27,7 +36,7 @@ commands = {"commands": '/weather - погода сейчас\n'
 def listener(messages):
     for m in messages:
         if m.content_type == 'text':
-            f_message = open("history.txt", 'a')
+            f_message = open("history.txt", 'a', encoding='utf-8')
             f_message.write(datetime.datetime.fromtimestamp(int(m.date)).strftime("%d.%m.%Y %H:%M:%S") + "[" + str(
                 m.chat.id) + "]" + m.chat.first_name + ": " + m.text + "\n")
             f_message.close()
@@ -112,13 +121,110 @@ def yandex():
     return res
 
 
+def _generate_signature(key, data):
+    key_bytes = bytes(key, 'utf-8')
+    data_bytes = bytes(data, 'utf-8')
+    signature = hmac.new(
+        key_bytes,
+        data_bytes,
+        hashlib.sha1
+    ).digest()
+    return b64encode(signature).decode()
+
+
+def yahoo():
+    translator = Translator()
+    woeid = '24553585' # Moscow
+    app_id = ''
+    consumer_key = ''
+    consumer_secret = ''
+    url = 'https://weather-ydn-yql.media.yahoo.com/forecastrss'
+
+    method = 'GET'
+    concat = '&'
+    query = {
+        'woeid': woeid,
+        'u': 'c',
+        'format': 'json'
+    }
+    oauth = {
+        'oauth_consumer_key': consumer_key,
+        'oauth_nonce': uuid.uuid4().hex,
+        'oauth_signature_method': 'HMAC-SHA1',
+        'oauth_timestamp': str(int(time.time())),
+        'oauth_version': '1.0'
+    }
+
+    # Prepare signature string (merge all params and SORT them)
+    merged_params = query.copy()
+    merged_params.update(oauth)
+    sorted_params = [
+        k + '=' + urllib.parse.quote(merged_params[k], safe='')
+        for k in sorted(merged_params.keys())
+    ]
+    signature_base_str = (
+            method +
+            concat +
+            urllib.parse.quote(
+                url,
+                safe=''
+            ) +
+            concat +
+            urllib.parse.quote(concat.join(sorted_params), safe='')
+    )
+
+    # Generate signature
+    composite_key = urllib.parse.quote(
+        consumer_secret,
+        safe=''
+    ) + concat
+    oauth_signature = _generate_signature(
+        composite_key,
+        signature_base_str
+    )
+
+    # Prepare Authorization header
+    oauth['oauth_signature'] = oauth_signature
+    auth_header = (
+            'OAuth ' +
+            ', '.join(
+                [
+                    '{}="{}"'.format(k, v)
+                    for k, v in oauth.items()
+                ]
+            )
+    )
+
+    # Send request
+    url = url + '?' + urllib.parse.urlencode(query)
+    request = urllib.request.Request(url)
+    request.add_header('Authorization', auth_header)
+    request.add_header('X-Yahoo-App-Id', app_id)
+    response = urllib.request.urlopen(request).read()
+    JSON_object = json.loads(response.decode('utf-8'))
+
+    wind = JSON_object['current_observation']['wind']['speed']
+    humidity = JSON_object['current_observation']['atmosphere']['humidity']
+    pressure = JSON_object['current_observation']['atmosphere']['pressure']
+    temp = JSON_object['current_observation']['condition']['temperature']
+    now = JSON_object['current_observation']['condition']['text']
+    now_tr = translator.translate(now, dest="ru").text
+
+    res = "*По данным Yahoo:*\nТемпература: `" + str(temp) + "°`" + \
+          "\nДавление: `" + str(pressure * 0.75) + " мм рт. ст.`" + \
+          "\nВлажность: `" + str(humidity) + "%`" + \
+          "\nВетер: `" + str(wind * 0.27) + " (м/с)`" + \
+          "\nСейчас: `" + now_tr + "`"
+    return res
+
+
 @bot.message_handler(commands=['weather'])
 def select_source(m):
     cid = m.chat.id
     btns = []
     keyboard = types.InlineKeyboardMarkup(row_width=2)
-    call_back = ['openweathermap', 'yandex']
-    subjects = ['OpenWeatherMap', 'Yandex']
+    call_back = ['openweathermap', 'yandex', 'yahoo']
+    subjects = ['OpenWeatherMap', 'Yandex', 'Yahoo']
     for data, text in zip(call_back, subjects):
         data = types.InlineKeyboardButton(text=text, callback_data=data)
         btns.append(data)
@@ -162,6 +268,8 @@ def ans(call):
         bot.edit_message_text(openweathermap(), cid, mid, reply_markup=kb, parse_mode='Markdown')
     elif call.data == "yandex":
         bot.edit_message_text(yandex(), cid, mid, reply_markup=kb, parse_mode='Markdown')
+    elif call.data == 'yahoo':
+        bot.edit_message_text(yahoo(), cid, mid, reply_markup=kb, parse_mode='Markdown')
 
 
 def weather_schedule():
@@ -169,6 +277,7 @@ def weather_schedule():
     for sub in subs:
         bot.send_message(sub, openweathermap(), parse_mode='Markdown')
         bot.send_message(sub, yandex(), parse_mode='Markdown')
+        bot.send_message(sub, yahoo(), parse_mode='Markdown')
 
 
 @bot.message_handler(
