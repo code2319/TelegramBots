@@ -1,3 +1,4 @@
+import os
 import emoji
 import telebot
 import datetime
@@ -21,7 +22,8 @@ data = Weather()
 
 commands = {"commands": '/weather - погода сейчас\n'
                         '/sub - подписаться на уведомления\n'
-                        '/unsub - отписаться от уведомлений'}
+                        '/unsub - отписаться от уведомлений\n'
+                        '/map - карта осадков'}
 
 
 def listener(messages):
@@ -81,6 +83,17 @@ def unsub(m):
             bot.send_message(cid, "Вы еще не подписаны...")
 
 
+@bot.message_handler(commands=['map'])
+def rain_map(m):
+    cid = m.chat.id
+    # admin m.chat.id
+    if cid == 123:
+        await bot.send_chat_action(cid, 'upload_photo')
+        data.rain_map()
+        if os.path.exists("rain.png"):
+            bot.send_photo(cid, types.InputFile("rain.png"))
+
+
 @bot.callback_query_handler(func=lambda call: True)
 def ans(call):
     kb = types.InlineKeyboardMarkup()
@@ -96,10 +109,10 @@ def ans(call):
 
 def weather_schedule():
     subs = [line.rstrip('\n') for line in open("sub.txt", 'r')]
-    for sub in subs:
-        bot.send_message(sub, data.openweathermap(), parse_mode='Markdown')
-        bot.send_message(sub, data.yandex(), parse_mode='Markdown')
-        bot.send_message(sub, data.yahoo(), parse_mode='Markdown')
+    if os.stat("sub.txt").st_size != 0:
+        for cid in subs:
+            res = data.openweathermap() + "\n\n" + data.yandex() + "\n\n" + data.yahoo()
+            bot.send_message(cid, res, parse_mode='Markdown')
 
 
 @bot.message_handler(

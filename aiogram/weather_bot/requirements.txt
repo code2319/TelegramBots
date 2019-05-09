@@ -3,3 +3,5 @@ requests==2.21.0
 APScheduler==3.6.0
 googletrans==2.4.0
 aiohttp_socks==0.2.2
+fake-useragent==0.1.11
+selenium==3.141.0

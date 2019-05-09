@@ -1,3 +1,4 @@
+import os
 import datetime
 from weather_data import Weather
 from aiogram import Bot, Dispatcher, executor, types
@@ -20,7 +21,8 @@ data = Weather()
 
 commands = {"commands": '/weather - погода сейчас\n'
                         '/sub - подписаться на уведомления\n'
-                        '/unsub - отписаться от уведомлений'}
+                        '/unsub - отписаться от уведомлений\n'
+                        '/map - карта осадков'}
 
 
 @dp.message_handler(commands=['start', 'help'])
@@ -69,6 +71,17 @@ async def unsub(m):
             await bot.send_message(cid, "Вы еще не подписаны...")
 
 
+@dp.message_handler(commands=['map'])
+async def rain_map(m):
+    cid = m.chat.id
+    # admin m.chat.id
+    if cid == 123:
+        await bot.send_chat_action(cid, 'upload_photo')
+        data.rain_map()
+        if os.path.exists("rain.png"):
+            await bot.send_photo(cid, types.InputFile("rain.png"))
+
+
 @dp.callback_query_handler(lambda callback_query: True)
 async def ans(call: types.CallbackQuery):
     kb = types.InlineKeyboardMarkup()
@@ -84,10 +97,10 @@ async def ans(call: types.CallbackQuery):
 
 async def weather_schedule():
     subs = [line.rstrip('\n') for line in open("sub.txt", 'r')]
-    for sub in subs:
-        await bot.send_message(sub, data.openweathermap(), parse_mode=ParseMode.MARKDOWN)
-        await bot.send_message(sub, data.yandex(), parse_mode=ParseMode.MARKDOWN)
-        await bot.send_message(sub, data.yahoo(), parse_mode=ParseMode.MARKDOWN)
+    if os.stat("sub.txt").st_size != 0:
+        for cid in subs:
+            res = data.openweathermap() + "\n\n" + data.yandex() + "\n\n" + data.yahoo()
+            await bot.send_message(cid, res, parse_mode=ParseMode.MARKDOWN)
 
 
 @dp.message_handler(content_types=ContentType.ANY)
@@ -97,12 +110,11 @@ async def unknown_message(msg: types.Message):
                         code('команда'), '/help')
 
     if msg.content_type == "text":
-        with open("history/history.txt", 'a') as f:
+        with open("history.txt", 'a') as f:
             f.write(str(msg.date) +
                     " [" + str(msg.chat.id) + "] " +
                     msg.chat.first_name + ": " +
                     msg.text + "\n")
-            f.close()
 
     await msg.reply(message_text, parse_mode=ParseMode.MARKDOWN)
 

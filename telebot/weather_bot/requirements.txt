@@ -4,3 +4,5 @@ PySocks==1.6.8
 requests==2.21.0
 googletrans==2.4.0
 emoji==0.5.2
+fake-useragent==0.1.11
+selenium==3.141.0

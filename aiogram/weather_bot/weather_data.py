@@ -1,14 +1,19 @@
+import os
 import json
 import hmac
 import time
 import uuid
 import urllib
 import hashlib
+import platform
 import requests
 import urllib.parse
 from base64 import b64encode
+from selenium import webdriver
 from googletrans import Translator
 from urllib.request import urlopen
+from fake_useragent import UserAgent
+from selenium.webdriver.firefox.options import Options
 
 
 class Weather:
@@ -170,9 +175,53 @@ class Weather:
         now = JSON_object['current_observation']['condition']['text']
         now_tr = translator.translate(now, dest="ru").text
 
+        wind = round(wind * 0.27, 2)
         res = "*По данным Yahoo:*\nТемпература: `" + str(temp) + "°`" + \
               "\nДавление: `" + str(pressure * 0.75) + " мм рт. ст.`" + \
               "\nВлажность: `" + str(humidity) + "%`" + \
-              "\nВетер: `" + str(wind * 0.27) + " (м/с)`" + \
+              "\nВетер: `" + str(wind) + " (м/с)`" + \
               "\nСейчас: `" + now_tr + "`"
         return res
+
+    @staticmethod
+    def rain_map():
+        """
+        For CLI CentOS7:
+            wget <geckodriver.tar.gz>
+            wget <firefox.tar.bz2>
+            yum install gtk3
+            yum install xorg-x11-server-Xvfb <optional>
+        :return:
+        """
+
+        # <optional>
+        # if platform.system() == "Linux":
+        #     try:
+        #         os.system("Xvfb :0 -ac & export DISPLAY=:0")
+        #     except Exception as err:
+        #         print(err)
+
+        ua = UserAgent()
+        profile = webdriver.FirefoxProfile()
+        profile.set_preference("general.useragent.override", ua.random)
+        options = Options()
+        options.add_argument('--headless')
+
+        if platform.system() == "Windows":
+            driver = webdriver.Firefox(
+                firefox_profile=profile,
+                options=options
+            )
+        else:
+            driver = webdriver.Firefox(
+                firefox_profile=profile,
+                executable_path='/usr/local/bin/geckodriver',
+                firefox_binary='/usr/local/firefox/firefox',
+                options=options
+            )
+
+        url = 'https://www.windy.com/55.750/37.620?rain,55.761,37.895,9'
+        driver.get(url)
+        time.sleep(3)
+        driver.get_screenshot_as_file('rain.png')
+        driver.quit()
