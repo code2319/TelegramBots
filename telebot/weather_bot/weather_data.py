@@ -69,22 +69,18 @@ class Weather:
         pressure = data['fact']['pressure_mm']
         humidity = data['fact']['humidity']
 
-        cond = {'clear': 'ясно', 'partly-cloudy': 'малооблачно', 'cloudy': 'облачно с прояснениями',
-                'overcast': 'пасмурно', 'partly-cloudy-and-light-rain': 'небольшой дождь',
-                'partly-cloudy-and-rain': 'дождь', 'overcast-and-rain': 'сильный дождь',
-                'overcast-thunderstorms-with-rain': 'сильный дождь, гроза', 'cloudy-and-light-rain': 'небольшой дождь',
-                'overcast-and-light-rain': 'небольшой дождь', 'cloudy-and-rain': 'дождь',
-                'overcast-and-wet-snow': 'дождь со снегом', 'partly-cloudy-and-light-snow': 'небольшой снег',
-                'partly-cloudy-and-snow': 'снег', 'overcast-and-snow': 'снегопад',
-                'cloudy-and-light-snow': 'небольшой снег', 'overcast-and-light-snow': 'небольшой снег',
-                'cloudy-and-snow': 'снег'}
+        d = {}
+        with open("conditions.txt", 'r', encoding='utf-8') as f:
+            for i in f.readlines():
+                key, val = i.strip().split(':')
+                d[key] = val
 
         res = "*По данным Яндекс.Погоды:*\nТемпература: `" + str(temp) + "°`" + \
               "\nОщущается как: `" + str(feels_temp) + "°`" + \
               "\nДавление: `" + str(pressure) + " мм рт. ст.`" + \
               "\nВлажность: `" + str(humidity) + "%`" + \
               "\nВетер: `" + str(wind) + " (м/с)`" + \
-              "\nСейчас: `" + cond[condition] + "`"
+              "\nСейчас: `" + d[str(condition)] + "`"
         return res
 
     def _generate_signature(self, key, data):
@@ -172,15 +168,45 @@ class Weather:
         humidity = JSON_object['current_observation']['atmosphere']['humidity']
         pressure = JSON_object['current_observation']['atmosphere']['pressure']
         temp = JSON_object['current_observation']['condition']['temperature']
-        now = JSON_object['current_observation']['condition']['text']
-        now_tr = translator.translate(now, dest="ru").text
+        now = JSON_object['current_observation']['condition']['code']
+
+        d = {}
+        with open("conditions.txt", 'r', encoding='utf-8') as f:
+            for i in f.readlines():
+                key, val = i.strip().split(':')
+                d[key] = val
 
         wind = round(wind * 0.27, 2)
         res = "*По данным Yahoo:*\nТемпература: `" + str(temp) + "°`" + \
               "\nДавление: `" + str(pressure * 0.75) + " мм рт. ст.`" + \
               "\nВлажность: `" + str(humidity) + "%`" + \
               "\nВетер: `" + str(wind) + " (м/с)`" + \
-              "\nСейчас: `" + now_tr + "`"
+              "\nСейчас: `" + d[str(now)] + "`"
+        return res
+
+    # 50 calls/day
+    def accuweather(self):
+        API_KEY = ''
+        location_key = '294021'
+        url = f'http://dataservice.accuweather.com/currentconditions/v1/{location_key}?apikey={API_KEY}&language=ru-ru&details=true'
+        r = requests.get(url)
+        data = r.json()
+
+        now = data[0]['WeatherText']
+        temp = data[0]['Temperature']['Metric']['Value']
+        feels_temp = data[0]['RealFeelTemperatureShade']['Metric']['Value']
+        relative_humidity = data[0]['RelativeHumidity']
+        wind = data[0]['Wind']['Speed']['Metric']['Value']  # km/h
+        pressure = data[0]['Pressure']['Metric']['Value']  # mb
+
+        wind = round(wind * 0.27, 2)
+        res = "*По данным AccuWeather:*\nТемпература: `" + str(temp) + "°`" + \
+              "\nОщущается как: `" + str(feels_temp) + "°`" + \
+              "\nДавление: `" + str(pressure * 0.75) + " мм рт. ст.`" + \
+              "\nВлажность: `" + str(relative_humidity) + "%`" + \
+              "\nВетер: `" + str(wind) + " (м/с)`" + \
+              "\nСейчас: `" + now + "`"
+
         return res
 
     @staticmethod
@@ -223,5 +249,5 @@ class Weather:
         url = 'https://www.windy.com/55.750/37.620?rain,55.761,37.895,9'
         driver.get(url)
         time.sleep(3)
-        driver.get_screenshot_as_file('rain.png')
+        driver.get_screenshot_as_file('source/rain.png')
         driver.quit()

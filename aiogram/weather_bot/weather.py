@@ -1,4 +1,5 @@
 import os
+import logging
 import datetime
 from weather_data import Weather
 from aiogram import Bot, Dispatcher, executor, types
@@ -6,6 +7,11 @@ from aiogram.types import ParseMode, ContentType
 from aiogram.utils.markdown import text, italic, code
 from aiogram.utils.emoji import emojize
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+
+logging.basicConfig(
+        filename="source/botlog.log",
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        level=logging.INFO)
 
 login = ''
 password = ''
@@ -35,8 +41,8 @@ async def select_source(m: types.Message):
     cid = m.chat.id
     btns = []
     keyboard = types.InlineKeyboardMarkup(row_width=2)
-    call_back = ['openweathermap', 'yandex', 'yahoo']
-    subjects = ['OpenWeatherMap', 'Yandex', 'Yahoo']
+    call_back = ['openweathermap', 'yandex', 'yahoo', 'accuweather']
+    subjects = ['OpenWeatherMap', 'Yandex', 'Yahoo', 'AccuWeather']
     for data, text in zip(call_back, subjects):
         data = types.InlineKeyboardButton(text=text, callback_data=data)
         btns.append(data)
@@ -47,11 +53,11 @@ async def select_source(m: types.Message):
 @dp.message_handler(commands=['sub'])
 async def sub(m):
     cid = m.chat.id
-    sub = [line.rstrip('\n') for line in open("sub.txt", 'rt')]
+    sub = [line.rstrip('\n') for line in open("source/sub.txt", 'rt')]
     if str(cid) in sub:
         await bot.send_message(cid, "Вы уже подписаны...")
     else:
-        with open("sub.txt", 'a') as f:
+        with open("source/sub.txt", 'a') as f:
             f.write(str(cid) + "\n")
         await bot.send_message(cid, "Вы успешно подписаны!")
 
@@ -59,12 +65,12 @@ async def sub(m):
 @dp.message_handler(commands=['unsub'])
 async def unsub(m):
     cid = m.chat.id
-    with open("sub.txt", 'r') as f:
+    with open("source/sub.txt", 'r') as f:
         lines = f.readlines()
         h = str(cid) + "\n"
         if h in lines:
             lines.remove(h)
-            with open("sub.txt", 'w') as f2:
+            with open("source/sub.txt", 'w') as f2:
                 f2.writelines(lines)
                 await bot.send_message(cid, "Вы отписались :с")
         else:
@@ -78,8 +84,8 @@ async def rain_map(m):
     if cid == 123:
         await bot.send_chat_action(cid, 'upload_photo')
         data.rain_map()
-        if os.path.exists("rain.png"):
-            await bot.send_photo(cid, types.InputFile("rain.png"))
+        if os.path.exists("source/rain.png"):
+            await bot.send_photo(cid, types.InputFile("source/rain.png"))
 
 
 @dp.callback_query_handler(lambda callback_query: True)
@@ -93,13 +99,15 @@ async def ans(call: types.CallbackQuery):
         await bot.edit_message_text(data.yandex(), cid, mid, reply_markup=kb, parse_mode=ParseMode.MARKDOWN)
     elif call.data == "yahoo":
         await bot.edit_message_text(data.yahoo(), cid, mid, reply_markup=kb, parse_mode=ParseMode.MARKDOWN)
+    elif call.data == "accuweather":
+        await bot.edit_message_text(data.accuweather(), cid, mid, reply_markup=kb, parse_mode=ParseMode.MARKDOWN)
 
 
 async def weather_schedule():
-    subs = [line.rstrip('\n') for line in open("sub.txt", 'r')]
-    if os.stat("sub.txt").st_size != 0:
+    subs = [line.rstrip('\n') for line in open("source/sub.txt", 'r')]
+    if os.stat("source/sub.txt").st_size != 0:
         for cid in subs:
-            res = data.openweathermap() + "\n\n" + data.yandex() + "\n\n" + data.yahoo()
+            res = data.openweathermap() + "\n\n" + data.yandex() + "\n\n" + data.yahoo() + "\n\n" + data.accuweather()
             await bot.send_message(cid, res, parse_mode=ParseMode.MARKDOWN)
 
 
@@ -110,7 +118,7 @@ async def unknown_message(msg: types.Message):
                         code('команда'), '/help')
 
     if msg.content_type == "text":
-        with open("history.txt", 'a') as f:
+        with open("source/history.txt", 'a') as f:
             f.write(str(msg.date) +
                     " [" + str(msg.chat.id) + "] " +
                     msg.chat.first_name + ": " +

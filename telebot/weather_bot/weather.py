@@ -1,11 +1,17 @@
 import os
 import emoji
+import logging
 import telebot
 import datetime
 from telebot import types
 from telebot import apihelper
 from weather_data import Weather
 from apscheduler.schedulers.background import BackgroundScheduler
+
+logging.basicConfig(
+        filename="source/botlog.log",
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        level=logging.INFO)
 
 login = ''
 password = ''
@@ -29,7 +35,7 @@ commands = {"commands": '/weather - погода сейчас\n'
 def listener(messages):
     for m in messages:
         if m.content_type == 'text':
-            f_message = open("history.txt", 'a', encoding='utf-8')
+            f_message = open("source/history.txt", 'a', encoding='utf-8')
             f_message.write(datetime.datetime.fromtimestamp(int(m.date)).strftime("%d.%m.%Y %H:%M:%S") + "[" + str(
                 m.chat.id) + "]" + m.chat.first_name + ": " + m.text + "\n")
             f_message.close()
@@ -47,8 +53,8 @@ def select_source(m):
     cid = m.chat.id
     btns = []
     keyboard = types.InlineKeyboardMarkup(row_width=2)
-    call_back = ['openweathermap', 'yandex', 'yahoo']
-    subjects = ['OpenWeatherMap', 'Yandex', 'Yahoo']
+    call_back = ['openweathermap', 'yandex', 'yahoo', 'accuweather']
+    subjects = ['OpenWeatherMap', 'Yandex', 'Yahoo', 'AccuWeather']
     for data, text in zip(call_back, subjects):
         data = types.InlineKeyboardButton(text=text, callback_data=data)
         btns.append(data)
@@ -59,11 +65,11 @@ def select_source(m):
 @bot.message_handler(commands=['sub'])
 def sub(m):
     cid = m.chat.id
-    sub = [line.rstrip('\n') for line in open("sub.txt", 'rt')]
+    sub = [line.rstrip('\n') for line in open("source/sub.txt", 'rt')]
     if str(cid) in sub:
         bot.send_message(cid, "Вы уже подписаны...")
     else:
-        with open("sub.txt", 'a') as f:
+        with open("source/sub.txt", 'a') as f:
             f.write(str(cid) + "\n")
         bot.send_message(cid, "Вы успешно подписаны!")
 
@@ -71,12 +77,12 @@ def sub(m):
 @bot.message_handler(commands=['unsub'])
 def unsub(m):
     cid = m.chat.id
-    with open("sub.txt", 'r') as f:
+    with open("source/sub.txt", 'r') as f:
         lines = f.readlines()
         h = str(cid) + "\n"
         if h in lines:
             lines.remove(h)
-            with open("sub.txt", 'w') as f2:
+            with open("source/sub.txt", 'w') as f2:
                 f2.writelines(lines)
                 bot.send_message(cid, "Вы отписались :с")
         else:
@@ -90,8 +96,8 @@ def rain_map(m):
     if cid == 123:
         await bot.send_chat_action(cid, 'upload_photo')
         data.rain_map()
-        if os.path.exists("rain.png"):
-            bot.send_photo(cid, types.InputFile("rain.png"))
+        if os.path.exists("source/rain.png"):
+            bot.send_photo(cid, types.InputFile("source/rain.png"))
 
 
 @bot.callback_query_handler(func=lambda call: True)
@@ -105,13 +111,15 @@ def ans(call):
         bot.edit_message_text(data.yandex(), cid, mid, reply_markup=kb, parse_mode='Markdown')
     elif call.data == 'yahoo':
         bot.edit_message_text(data.yahoo(), cid, mid, reply_markup=kb, parse_mode='Markdown')
+    elif call.data == "accuweather":
+        bot.edit_message_text(data.accuweather(), cid, mid, reply_markup=kb, parse_mode='Markdown')
 
 
 def weather_schedule():
     subs = [line.rstrip('\n') for line in open("sub.txt", 'r')]
-    if os.stat("sub.txt").st_size != 0:
+    if os.stat("source/sub.txt").st_size != 0:
         for cid in subs:
-            res = data.openweathermap() + "\n\n" + data.yandex() + "\n\n" + data.yahoo()
+            res = data.openweathermap() + "\n\n" + data.yandex() + "\n\n" + data.yahoo() + "\n\n" + data.accuweather()
             bot.send_message(cid, res, parse_mode='Markdown')
 
 
